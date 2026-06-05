@@ -1,0 +1,18 @@
+# ESP-IDF build output
+build/
+
+# SDK config (optional: some people commit this)
+sdkconfig
+sdkconfig.old
+
+# IDF component manager
+dependencies.lock
+managed_components/
+
+# Neovim
+.clangd
+compile_commands.json
+
+# OS
+.DS_Store
+Thumbs.db
