@@ -2,17 +2,19 @@
  
  
 SOURCE: 
-   nvim /opt/esp-idf/examples/wifi/softap_sta/main/softap_sta.c
- 
- 
+    SOFT AP WIFI
+    nvim ~/esp-idf/examples/wifi/softap_sta/main/softap_sta.c
+
+    HTTP Server
+    nvim ~/esp-idf/examples/protocols/http_server/simple/main/main.c
+    
   */
 
 #include <string.h>
+#include <esp_http_server.h>
 #include "esp_err.h"
 #include "esp_wifi_default.h"
 #include "esp_wifi_types_generic.h"
-#include "esp_wifi_types_native.h"
-#include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_mac.h"
 #include "esp_wifi.h"
@@ -81,6 +83,36 @@ esp_netif_t *wifi_init_softap(void) {
     return esp_netif_ap;
 }
 
+// HTTP Handler 
+static esp_err_t main_get_handler(httpd_req_t *req) {
+    const char* html = "<h1>ESPresso TEST</h1>";
+    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// GET 
+static const httpd_uri_t main = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = main_get_handler,
+};
+
+static httpd_handle_t start_webserver(void) {
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
+    if (httpd_start(&server, &config) == ESP_OK) {
+        // SET URI HANDLERS
+        ESP_LOGI(TAG_AP, "Server Started");
+        httpd_register_uri_handler(server, &main);
+        return server;
+    }
+
+    ESP_LOGI(TAG_AP, "Server failed to start.");
+    return NULL;
+}
+
+
 void app_main(void)
 {
 
@@ -113,6 +145,13 @@ void app_main(void)
     wifi_init_softap();
 
     ESP_ERROR_CHECK(esp_wifi_start());
+    
+    start_webserver();
+
+    // while running
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
     
     printf("ESPresso booting...\n");
 }
