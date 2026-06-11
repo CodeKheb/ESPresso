@@ -1,13 +1,13 @@
 # ESP-IDF build output
-build/
+firmware/build/
 
 # SDK config (optional: some people commit this)
-sdkconfig
-sdkconfig.old
+firmware/sdkconfig
+firmware/sdkconfig.old
 
 # IDF component manager
-dependencies.lock
-managed_components/
+firmware/dependencies.lock
+firmware/managed_components/
 
 # Neovim
 .clangd
