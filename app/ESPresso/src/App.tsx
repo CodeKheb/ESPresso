@@ -1,15 +1,29 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+// import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  const wsRef = useRef<WebSocket | null>(null);
+  const [message, setMessage] = useState("");
+
+
+  useEffect(() => {
+      const ws = new WebSocket('ws://192.168.4.1/ws');
+      ws.onopen = () => console.log('connected');
+      ws.onmessage = (e) => console.log('message:', e.data);
+      ws.onerror = (e) => console.error('error:', e);
+      wsRef.current = ws;
+
+      return () => ws.close();
+  }, []); 
+
+  function send() {
+      if (wsRef.current?.readyState == WebSocket.OPEN) {
+          wsRef.current.send(message);
+          setMessage("");
+      }
   }
 
   return (
@@ -33,17 +47,17 @@ function App() {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          greet();
+          send();
         }}
       >
         <input
           id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+          value={message}
+          onChange={(e) => setMessage(e.currentTarget.value)}
+          placeholder="Type a to ESPresso..."
         />
-        <button type="submit">Greet</button>
+        <button type="submit">Send</button>
       </form>
-      <p>{greetMsg}</p>
     </main>
   );
 }
