@@ -7,8 +7,7 @@ SOURCE:
 
     HTTP Server
     nvim ~/esp-idf/examples/protocols/http_server/simple/main/main.c
-    
-  */
+    */
 
 #include <string.h>
 #include <esp_http_server.h>
@@ -31,8 +30,19 @@ SOURCE:
 #define ESP_WIFI_AP_MAX_CONNECTION  4 
 #define ESP_WIFI_AUTH_MODE      WIFI_AUTH_WPA2_PSK
 
+// Websocket Config
+#define MAX_CLIENTS 4 // same as ESP_WIFI_AP_MAX_CONNECTION
+
+
 
 static const char *TAG_AP = "WiFi SoftAP";
+
+// struct holding the server handle
+// internal socket fd and to use request send 
+struct async_resp_arg {
+    httpd_handle_t hd;
+    int fd;
+};
 
 // WIFI HANDLER
 static void wifi_event_handler(
@@ -43,11 +53,11 @@ static void wifi_event_handler(
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t *event = (wifi_event_ap_staconnected_t *) event_data;
         ESP_LOGI(TAG_AP, "Station "MACSTR" joined, AID=%d",
-                MAC2STR(event->mac), event->aid);
+                MAC2STR(event -> mac), event -> aid);
     }  else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t *) event_data;
         ESP_LOGI(TAG_AP, "Station "MACSTR" left, AID=%d, reason:%d",
-                 MAC2STR(event->mac), event->aid, event->reason);
+                 MAC2STR(event -> mac), event -> aid, event -> reason);
     } 
 
 }
@@ -83,6 +93,102 @@ esp_netif_t *wifi_init_softap(void) {
     return esp_netif_ap;
 }
 
+
+// BROADCAST FUNCTION
+static void broadcast(httpd_handle_t hd, httpd_ws_frame_t *pkt) {
+    size_t clients  = MAX_CLIENTS;
+    int client_fds[MAX_CLIENTS];
+
+    if (httpd_get_client_list(hd, &clients, client_fds) == ESP_OK) {
+        for (int i = 0; i < clients; i++) {
+            if (httpd_ws_get_fd_info(hd, client_fds[i]) ==  HTTPD_WS_CLIENT_WEBSOCKET) {
+                httpd_ws_send_frame_async(hd, client_fds[i], pkt);
+            }
+        }
+    }
+}
+
+// Websocket Handler
+static esp_err_t ws_handler(httpd_req_t *req) {
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    if (req -> method == HTTP_GET) {
+        ESP_LOGI(TAG_AP, "Client Connected");
+        return ESP_OK;
+    }
+
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG_AP, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        return ret;
+    }
+    ESP_LOGI(TAG_AP, "frame len is %d", ws_pkt.len);
+    if (ws_pkt.len) {
+        buf = calloc(1, ws_pkt.len + 1);
+        if (buf == NULL) {
+            ESP_LOGE(TAG_AP, "Failed to calloc memory for buf");
+            return ESP_ERR_NO_MEM;
+        }
+        ws_pkt.payload = buf;
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG_AP, "httpd_ws_recv_frame failed with %d", ret);
+            free(buf);
+            return ret;
+        }
+        ESP_LOGI(TAG_AP, "Got packet with message: %s", ws_pkt.payload);
+    }
+
+    ESP_LOGI(TAG_AP, "Packet type: %d", ws_pkt.type);
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT 
+            && ws_pkt.payload != NULL) {
+        broadcast(req -> handle, &ws_pkt);
+    }
+
+    free(buf);
+    return ESP_OK;
+}
+
+// WS URI
+static const httpd_uri_t ws = {
+    .uri = "/ws",
+    .method = HTTP_GET,
+    .handler = ws_handler,
+    .is_websocket = true,
+};
+
+// WEBSOCKET ASYNC SEND
+static void ws_async_send(void *arg) {
+    static const char *data = "Async data";
+    struct async_resp_arg *resp_arg = arg;
+    httpd_handle_t hd = resp_arg -> hd;
+    int fd = resp_arg -> fd;
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t*)data;
+    ws_pkt.len = strlen(data);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+    free(resp_arg);
+}
+
+// TRIGGER ASYNC SEND
+static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
+    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
+    if (resp_arg == NULL) return ESP_ERR_NO_MEM;
+    
+    resp_arg -> hd = req -> handle;
+    resp_arg -> fd = httpd_req_to_sockfd(req);
+    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
+    if (ret != ESP_OK) free(resp_arg);
+
+    return ret;
+}
+
 // HTTP Handler 
 static esp_err_t main_get_handler(httpd_req_t *req) {
     const char* html = "<h1>ESPresso TEST</h1>";
@@ -105,13 +211,13 @@ static httpd_handle_t start_webserver(void) {
         // SET URI HANDLERS
         ESP_LOGI(TAG_AP, "Server Started");
         httpd_register_uri_handler(server, &main);
+        httpd_register_uri_handler(server, &ws);
         return server;
     }
 
     ESP_LOGI(TAG_AP, "Server failed to start.");
     return NULL;
 }
-
 
 void app_main(void)
 {
