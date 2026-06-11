@@ -15,4 +15,12 @@ compile_commands.json
 
 # OS
 .DS_Store
-Thumbs.db
+T
+
+# App
+app/ESPresso/node_modules/
+app/ESPresso/dist
+app/ESPresso/src-tauri/target/
+
+# Git
+*.orighumbs.db
