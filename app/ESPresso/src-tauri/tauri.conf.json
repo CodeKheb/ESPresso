@@ -12,8 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "espresso",
-        "width": 800,
+        "title": "ESPresso",
+        "width": 600,
         "height": 600
       }
     ],
