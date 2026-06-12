@@ -7,6 +7,9 @@ SOURCE:
 
     HTTP Server
     nvim ~/esp-idf/examples/protocols/http_server/simple/main/main.c
+
+    WEBSOCKET
+    nvim ~/esp-idf/examples/protocols/http_server/ws_echo_server/main/ws_echo_server.c
     */
 
 #include <string.h>
@@ -33,8 +36,7 @@ SOURCE:
 // Websocket Config
 #define MAX_CLIENTS 4 // same as ESP_WIFI_AP_MAX_CONNECTION
 
-
-
+static httpd_handle_t server_handle = NULL;
 static const char *TAG_AP = "WiFi SoftAP";
 
 // struct holding the server handle
@@ -189,6 +191,27 @@ static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
     return ret;
 }
 
+static void ping_task(void *arg) {
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+        if (server_handle == NULL) continue;
+        
+        size_t clients = MAX_CLIENTS;
+        int client_fds[MAX_CLIENTS];
+
+        if (httpd_get_client_list(server_handle, &clients, client_fds) == ESP_OK) {
+            for (int i = 0; i < clients; i++) {
+                if (httpd_ws_get_fd_info(server_handle, client_fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
+                    httpd_ws_frame_t ping = {0};
+                    ping.type = HTTPD_WS_TYPE_PING;
+                    httpd_ws_send_frame_async(server_handle, client_fds[i], &ping);
+                    ESP_LOGI(TAG_AP, "Ping sent to fd %d", client_fds[i]);
+                }
+            }
+        }
+    }
+}
+
 // HTTP Handler 
 static esp_err_t main_get_handler(httpd_req_t *req) {
     const char* html = "<h1>ESPresso TEST</h1>";
@@ -252,7 +275,8 @@ void app_main(void)
 
     ESP_ERROR_CHECK(esp_wifi_start());
     
-    start_webserver();
+    server_handle = start_webserver();
+    xTaskCreate(ping_task, "ping_task", 4096, NULL, 5, NULL);
 
     // while running
     while (1) {
