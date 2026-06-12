@@ -2,17 +2,21 @@ import { useEffect, useRef, useState } from "react";
 // import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+type Status = "connecting" | "connected" | "disconnected" | "error";
+
 function App() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<Status>("connecting");
 
 
   useEffect(() => {
       const ws = new WebSocket('ws://192.168.4.1/ws');
-      ws.onopen = () => console.log('connected');
-      ws.onmessage = (e) => console.log('message:', e.data);
-      ws.onerror = (e) => console.error('error:', e);
+      ws.onopen = () => setStatus("connected");
+      ws.onclose = () => setStatus("disconnected");
+      ws.onmessage = (message) => console.log('message:', message.data);
+      ws.onerror = (error) => console.error('error:', error);
       wsRef.current = ws;
 
       return () => ws.close();
@@ -24,6 +28,25 @@ function App() {
           setMessage("");
       }
   }
+
+      if (status == "disconnected" || status == "error") {
+          return (
+              <main className="container">
+              <h1>ESPresso</h1>
+              <p>Not connected to ESPresso network.</p>
+              <p>Connect to <strong>ESPresso</strong> WiFi first, then reopen the app.</p>
+              </main>
+          );
+      }
+
+      if (status === "connecting") {
+          return (
+              <main className="container">
+              <h1>ESPresso</h1>
+              <p>Connecting...</p>
+              </main>
+          );
+      }
 
   return (
     <main className="container">
