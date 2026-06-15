@@ -1,32 +1,52 @@
 import { useEffect, useRef, useState } from "react";
-// import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
+type Profile = {
+    name: string;
+    role: string;
+    bio: string;
+}
+
+type WSmessage = {
+    type: string;
+    data: Profile[];
+}
+
 type Status = "connecting" | "connected" | "disconnected" | "error";
+type Screen = "create" | "dashboard";
 
 function App() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<Status>("connecting");
+  const [screen, setScreen] = useState<Screen>("create");
+  const [profiles, setProfiles] = useState<Profile[]>([]);
 
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [bio, setBio] = useState("");
 
   useEffect(() => {
       const ws = new WebSocket('ws://192.168.4.1/ws');
       ws.onopen = () => setStatus("connected");
       ws.onclose = () => setStatus("disconnected");
-      ws.onmessage = (message) => console.log('message:', message.data);
       ws.onerror = (error) => console.error('error:', error);
+      ws.onmessage = (json) => {
+          const msg: WSmessage = JSON.parse(json.data);
+          if (msg.type == "profiles") {
+              setProfiles(msg.data);
+          }
+      }
       wsRef.current = ws;
-
       return () => ws.close();
   }, []); 
 
-  function send() {
-      if (wsRef.current?.readyState == WebSocket.OPEN) {
-          wsRef.current.send(message);
-          setMessage("");
-      }
+  function submitProfile() {
+      if (!name || !role) return;
+      const profile = {name, role, bio}; 
+      wsRef.current?.send(JSON.stringify(profile));
+      setScreen("dashboard");
   }
 
       if (status == "disconnected" || status == "error") {
@@ -48,32 +68,44 @@ function App() {
           );
       }
 
+      if (screen == "create") {
+          return (
+              <main className="container">
+                <h1>ESPresso</h1>
+                <div className="row">
+                <a href="https://tauri.app" target="_blank">
+                <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
+                </a>
+                </div>
+                <p>Brewed from an ESP32</p>
+
+
+                <p>Create Profile</p>
+                <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input placeholder="Role" value={role} onChange={(e) => setRole(e.target.value)} />
+                <input placeholder="Tell a little about yourself:" value={bio} onChange={(e) => setBio(e.target.value)} />
+                <button onClick={submitProfile}>Join</button>
+                </main>
+          )
+      }
+
   return (
     <main className="container">
-      <h1>ESPresso</h1>
+      <h1>ESPresso Dashboard</h1>
 
       <div className="row">
        <a href="https://tauri.app" target="_blank">
           <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
         </a>
      </div>
-      <p>Brewed from an ESP32</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        <input
-          id="greet-input"
-          value={message}
-          onChange={(e) => setMessage(e.currentTarget.value)}
-          placeholder="Type message to ESPresso..."
-        />
-        <button type="submit">Send</button>
-      </form>
+      <p>People in the room.</p>
+      {profiles.map((person, id) =>
+                    <div key={id}>
+                   <h2>{person.name}</h2>
+                   <p>{person.role}</p>
+                   <p>{person.bio}</p>
+                   </div>
+                   )}
     </main>
   );
 }
