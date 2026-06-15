@@ -25,7 +25,7 @@ SOURCE:
 #include "esp_netif.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include "cjson/cJSON.h"
+#include "cJSON.h"
 
 // AP Config <- this important
 #define ESP_WIFI_AP_SSID        "ESPresso"
@@ -36,6 +36,19 @@ SOURCE:
 
 // Websocket Config
 #define MAX_CLIENTS 4 // same as ESP_WIFI_AP_MAX_CONNECTION
+
+// JSON struct
+#define MAX_NAME_LEN 32
+#define MAX_ROLE_LEN 64
+#define MAX_BIO_LEN 128
+
+typedef struct {
+    char name[MAX_NAME_LEN];
+    char role[MAX_ROLE_LEN];
+    char bio[MAX_BIO_LEN];
+    int fd;
+    bool active;
+} Profile;
 
 static httpd_handle_t server_handle = NULL;
 static const char *TAG_AP = "WiFi SoftAP";
