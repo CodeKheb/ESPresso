@@ -10,9 +10,13 @@ SOURCE:
 
     WEBSOCKET
     nvim ~/esp-idf/examples/protocols/http_server/ws_echo_server/main/ws_echo_server.c
+
+    cJSON
+    https://components.espressif.com/components/espressif/cjson/versions/1.7.19~2/readme
     */
 
 #include <string.h>
+#include <stdbool.h>
 #include <esp_http_server.h>
 #include "esp_err.h"
 #include "esp_wifi_default.h"
@@ -50,15 +54,10 @@ typedef struct {
     bool active;
 } Profile;
 
+static Profile profiles[MAX_CLIENTS];
+
 static httpd_handle_t server_handle = NULL;
 static const char *TAG_AP = "WiFi SoftAP";
-
-// struct holding the server handle
-// internal socket fd and to use request send 
-struct async_resp_arg {
-    httpd_handle_t hd;
-    int fd;
-};
 
 // WIFI HANDLER
 static void wifi_event_handler(
@@ -124,6 +123,100 @@ static void broadcast(httpd_handle_t hd, httpd_ws_frame_t *pkt) {
     }
 }
 
+static void broadcast_profiles(httpd_handle_t hd) {
+    // create root
+    cJSON *root = cJSON_CreateObject();
+    // add type and profiles to root
+    cJSON_AddStringToObject(root, "type", "profiles");
+    // create data array
+    cJSON *data = cJSON_CreateArray();
+
+    // put profile name, role, bio in data array
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (profiles[i].active) {
+            cJSON *profile_obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(profile_obj, "name", profiles[i].name);
+            cJSON_AddStringToObject(profile_obj, "role", profiles[i].role);
+            cJSON_AddStringToObject(profile_obj, "bio", profiles[i].bio);
+
+            cJSON_AddItemToArray(data, profile_obj);
+        }
+    }
+
+    // add data to root
+    cJSON_AddItemToObject(root, "data", data);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    // text message
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    // JSON string
+    ws_pkt.payload = (uint8_t *)json_str;    
+    // length of the string
+    ws_pkt.len = strlen(json_str);
+
+    broadcast(hd, &ws_pkt);
+
+    free(json_str);
+}
+
+
+static void store_profile(int fd, const char *json_string) {
+    // parse the JSON
+    cJSON *json = cJSON_Parse(json_string);
+    if (json == NULL) return;
+
+    // slot 
+    int slot = -1;
+
+    // if fd matches the profile slot = profile
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (fd == profiles[i].fd) {
+            slot = i;
+            break;
+        }
+    } 
+
+
+    // if no slot left, find a non active slot 
+    if (slot == -1) {
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (!profiles[i].active) {
+                slot = i;
+                break;
+            }
+        }
+    }
+
+    // if no room left
+    if (slot == -1) {
+        cJSON_Delete(json);
+        return;
+    }
+
+    // Store JSON in slot
+    cJSON *name = cJSON_GetObjectItem(json, "name");
+    const char *name_str = cJSON_GetStringValue(name);
+    if (name_str != NULL) strncpy(profiles[slot].name, name_str, MAX_NAME_LEN - 1);
+
+    cJSON *role = cJSON_GetObjectItem(json, "role");
+    const char *role_str = cJSON_GetStringValue(role);
+    if (role_str != NULL) strncpy(profiles[slot].role, role_str , MAX_ROLE_LEN - 1);
+
+    cJSON *bio = cJSON_GetObjectItem(json, "bio");
+    const char *bio_str = cJSON_GetStringValue(bio);
+    if (bio_str != NULL) strncpy(profiles[slot].bio, bio_str, MAX_BIO_LEN - 1);
+
+    // store fd and make profile active
+    profiles[slot].fd = fd;
+    profiles[slot].active = true;
+    cJSON_Delete(json);
+}
+
+
 // Websocket Handler
 static esp_err_t ws_handler(httpd_req_t *req) {
     httpd_ws_frame_t ws_pkt;
@@ -161,7 +254,8 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     ESP_LOGI(TAG_AP, "Packet type: %d", ws_pkt.type);
     if (ws_pkt.type == HTTPD_WS_TYPE_TEXT 
             && ws_pkt.payload != NULL) {
-        broadcast(req -> handle, &ws_pkt);
+        store_profile(httpd_req_to_sockfd(req), (char *)ws_pkt.payload);
+        broadcast_profiles(req -> handle);
     }
 
     free(buf);
@@ -175,35 +269,6 @@ static const httpd_uri_t ws = {
     .handler = ws_handler,
     .is_websocket = true,
 };
-
-// WEBSOCKET ASYNC SEND
-static void ws_async_send(void *arg) {
-    static const char *data = "Async data";
-    struct async_resp_arg *resp_arg = arg;
-    httpd_handle_t hd = resp_arg -> hd;
-    int fd = resp_arg -> fd;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t*)data;
-    ws_pkt.len = strlen(data);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-    free(resp_arg);
-}
-
-// TRIGGER ASYNC SEND
-static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req) {
-    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
-    if (resp_arg == NULL) return ESP_ERR_NO_MEM;
-    
-    resp_arg -> hd = req -> handle;
-    resp_arg -> fd = httpd_req_to_sockfd(req);
-    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
-    if (ret != ESP_OK) free(resp_arg);
-
-    return ret;
-}
 
 static void ping_task(void *arg) {
     while (1) {
@@ -255,9 +320,11 @@ static httpd_handle_t start_webserver(void) {
     ESP_LOGI(TAG_AP, "Server failed to start.");
     return NULL;
 }
-
 void app_main(void)
 {
+
+    // Initialize profiles
+    memset(profiles, 0, sizeof(profiles));
 
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
