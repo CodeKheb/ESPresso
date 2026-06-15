@@ -25,6 +25,7 @@ SOURCE:
 #include "esp_netif.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "cjson/cJSON.h"
 
 // AP Config <- this important
 #define ESP_WIFI_AP_SSID        "ESPresso"
