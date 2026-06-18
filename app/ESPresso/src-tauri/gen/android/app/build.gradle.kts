@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -13,6 +14,13 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 36
     namespace = "com.CodeKheb.espresso"
@@ -23,6 +31,14 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+      create("release") {
+        storeFile = file(keystoreProperties["storeFile"] as String)
+        storePassword = keystoreProperties["password"] as String
+        keyAlias = keystoreProperties["keyAlias"] as String
+        keyPassword = keystoreProperties["password"] as String
+      }
     }
     buildTypes {
         getByName("debug") {
@@ -38,6 +54,9 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+
+            signingConfig = signingConfigs.getByName("release")
+
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
@@ -46,7 +65,7 @@ android {
         }
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+      jvmTarget = "1.8"
     }
     buildFeatures {
         buildConfig = true

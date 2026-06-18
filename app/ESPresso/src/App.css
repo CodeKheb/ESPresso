@@ -1,109 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Work+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { min-height: 100dvh; }
+body { -webkit-tap-highlight-color: transparent; }
+
+/* ── Design Tokens ── */
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+  --background:               #fff8f5;
+  --surface:                  #fff8f5;
+  --surface-container:        #f4ece8;
+  --surface-container-low:    #faf2ee;
+  --surface-container-high:   #efe7e3;
+  --surface-container-highest:#e9e1dd;
+  --surface-variant:          #e9e1dd;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  --primary:                  #200e01;
+  --primary-container:        #38220f;
+  --primary-fixed:            #ffdcc3;
+  --primary-fixed-dim:        #e5bfa3;
+  --on-primary:               #ffffff;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+  --secondary:                #755841;
+  --secondary-container:      #fdd5b8;
+  --on-secondary:             #ffffff;
+  --on-secondary-container:   #785b44;
+
+  --tertiary-container:       #3a210e;
+  --on-tertiary-container:    #ac866c;
+
+  --outline:                  #81756c;
+  --outline-variant:          #d3c4ba;
+
+  --on-background:            #1e1b19;
+  --on-surface:               #1e1b19;
+  --on-surface-variant:       #4f453e;
+
+  --error:                    #ba1a1a;
+  --on-error:                 #ffffff;
+
+  --muted-tan:                #dbc1ac;
+
+  /* Typography */
+  --font-serif:   'Libre Caslon Text', Georgia, serif;
+  --font-sans:    'Work Sans', system-ui, sans-serif;
+
+  /* Spacing */
+  --space-xs:   4px;
+  --space-sm:   12px;
+  --space-base: 8px;
+  --space-gutter: 16px;
+  --space-md:   24px;
+  --space-lg:   40px;
+  --margin-mobile: 20px;
 }
 
-.container {
-  margin: 0;
-  padding-top: 10vh;
+/* ── Material Symbols ── */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  line-height: 1;
+  font-size: 24px;
+  vertical-align: middle;
+}
+.icon-filled {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Shared Layout ── */
+.app-shell {
+  background-color: var(--background);
+  color: var(--on-background);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
+/* ── Top App Bar ── */
+.top-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  height: 64px;
+  background: var(--background);
+  border-bottom: 1px solid var(--outline-variant);
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--margin-mobile);
 }
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.top-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
 }
-
-a:hover {
-  color: #535bf2;
+.top-bar-brand .brand-name {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
 }
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
+.top-bar-icon-btn {
+  width: 40px; height: 40px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--on-surface-variant);
+  transition: background 0.15s;
 }
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
+.top-bar-icon-btn:hover { background: var(--surface-container-high); }

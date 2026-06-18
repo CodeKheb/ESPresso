@@ -21,6 +21,7 @@ T
 app/ESPresso/node_modules/
 app/ESPresso/dist
 app/ESPresso/src-tauri/target/
+app/src-tauri/gen/android/keystore.properties
 
 # Git
 *.orighumbs.db
