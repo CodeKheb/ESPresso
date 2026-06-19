@@ -33,7 +33,7 @@ SOURCE:
 
 // AP Config <- this important
 #define ESP_WIFI_AP_SSID        "ESPresso"
-#define ESP_WIFI_AP_PASSWORD    "12345678"
+#define ESP_WIFI_AP_PASSWORD    "espresso"
 #define ESP_WIFI_AP_CHANNEL         1
 #define ESP_WIFI_AP_MAX_CONNECTION  4 
 #define ESP_WIFI_AUTH_MODE      WIFI_AUTH_WPA2_PSK
