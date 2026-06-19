@@ -51,7 +51,8 @@ export function DisconnectedScreen() {
           <div>
             <p className="tip-title">Quick Tip</p>
             <p className="tip-body">
-              If the device light is flashing amber, it's ready for pairing. Press the reset button on the back if needed.
+            Connect to the ESPresso wifi and turn off mobile data
+            <p>Password: espresso</p>
             </p>
           </div>
         </div>
