@@ -416,6 +416,8 @@ textarea.coffee-input { resize: none; padding-right: 16px; }
   margin-top: 12px;
 }
 .person-card-body-inner {
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
   padding-top: var(--space-base);
 }
@@ -432,6 +434,38 @@ textarea.coffee-input { resize: none; padding-right: 16px; }
   color: var(--on-surface-variant);
   font-style: italic;
   line-height: 1.5;
+}
+/* Inside Card */
+.person-card-body-inner .btn-add-contact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--space-base);
+  margin-left: auto;
+  padding: 8px 16px;
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  border: none;
+  border-radius: 9999px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s, background 0.15s;
+}
+.person-card-body-inner .btn-add-contact .material-symbols-outlined {
+  font-size: 18px;
+}
+.person-card-body-inner .btn-add-contact:hover  { opacity: 0.85; }
+.person-card-body-inner .btn-add-contact:active { transform: scale(0.96); }
+
+.person-card-body-inner .btn-add-contact:disabled {
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  cursor: default;
+  opacity: 0.7;
 }
 
 /* Empty state */

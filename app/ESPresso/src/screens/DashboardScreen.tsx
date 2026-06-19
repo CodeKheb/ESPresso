@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { Profile } from "../types";
 import { TopBar } from "./TopBar";
+import { Screen } from "../types";
 
-type Props = { profiles: Profile[] };
+type Props = { 
+    profiles: Profile[];
+    savedNames: Set<string>;
+    onAddContanct: (person: Profile) => void;
+    onNavigate: (screen: Screen) => void;
+};
 
 const AVATAR_STYLES = ["avatar-cafe", "avatar-init-a", "avatar-init-b"];
 
@@ -15,7 +21,20 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function PersonCard({ person, index }: { person: Profile; index: number }) {
+
+export function PersonCard({ 
+    person, 
+    index,
+    isSaved,
+    onAdd,
+    showAddButton = true,
+}: { 
+    person: Profile; 
+    index: number;
+    isSaved?: boolean;
+    onAdd?: () => void;
+    showAddButton?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const avatarClass = AVATAR_STYLES[index % AVATAR_STYLES.length];
 
@@ -42,13 +61,28 @@ function PersonCard({ person, index }: { person: Profile; index: number }) {
         <div className="person-card-body-inner">
           <p className="person-role">{person.role}</p>
           {person.bio && <p className="person-bio">"{person.bio}"</p>}
+          {showAddButton && (
+              <button
+                className="btn-add-contact"
+                disabled={isSaved}
+                onClick={(e)=> {
+                    e.stopPropagation();
+                    onAdd?.();
+                }}
+            >
+            <span className="material-symbols-outlined">
+             {isSaved ? "check" : "person_add"}
+             </span>
+             <span>{isSaved ? "Saved" : "Add"}</span>
+             </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export function DashboardScreen({ profiles }: Props) {
+export function DashboardScreen({ profiles, savedNames, onAddContanct, onNavigate }: Props) {
   return (
     <div className="app-shell">
       <TopBar />
@@ -68,7 +102,13 @@ export function DashboardScreen({ profiles }: Props) {
         ) : (
           <div className="people-list">
             {profiles.map((person, i) => (
-              <PersonCard key={i} person={person} index={i} />
+              <PersonCard 
+               key={i}
+               person={person}
+               index={i}
+               isSaved={savedNames.has(person.name)}
+               onAdd={() => onAddContanct(person)}
+            />
             ))}
           </div>
         )}
@@ -76,17 +116,17 @@ export function DashboardScreen({ profiles }: Props) {
 
       {/* Bottom Nav */}
       <nav className="bottom-nav">
-        <button className="nav-item">
+        <button className="nav-item" onClick={() => onNavigate("create")}>
           <span className="material-symbols-outlined">local_cafe</span>
           <span>Brew</span>
         </button>
-        <button className="nav-item active">
+        <button className="nav-item active" onClick={() => onNavigate("dashboard")}>
           <span className="material-symbols-outlined icon-filled">import_contacts</span>
           <span>Profiles</span>
         </button>
-        <button className="nav-item">
-          <span className="material-symbols-outlined">router</span>
-          <span>Devices</span>
+        <button className="nav-item" onClick={() => onNavigate("contacts")}>
+          <span className="material-symbols-outlined">call</span>
+          <span>Contacts</span>
         </button>
         <button className="nav-item">
           <span className="material-symbols-outlined">history</span>
