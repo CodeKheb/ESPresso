@@ -1,4 +1,5 @@
 export type Profile = {
+  deviceId: string;
   name: string;
   role: string;
   bio: string;
@@ -20,4 +21,4 @@ export type WSMessage = {
 };
 
 export type Status = "connecting" | "connected" | "disconnected" | "error";
-export type Screen = "create" | "dashboard" | "contacts";
+export type Screen = "create" | "dashboard" | "contacts" | "history";

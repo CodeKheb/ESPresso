@@ -6,7 +6,7 @@ import { Screen } from "../types";
 type Props = { 
     profiles: Profile[];
     savedNames: Set<string>;
-    onAddContanct: (person: Profile) => void;
+    onAddContact: (person: Profile) => void;
     onNavigate: (screen: Screen) => void;
 };
 
@@ -82,7 +82,7 @@ export function PersonCard({
   );
 }
 
-export function DashboardScreen({ profiles, savedNames, onAddContanct, onNavigate }: Props) {
+export function DashboardScreen({ profiles, savedNames, onAddContact: onAddContact, onNavigate }: Props) {
   return (
     <div className="app-shell">
       <TopBar />
@@ -107,7 +107,7 @@ export function DashboardScreen({ profiles, savedNames, onAddContanct, onNavigat
                person={person}
                index={i}
                isSaved={savedNames.has(person.name)}
-               onAdd={() => onAddContanct(person)}
+               onAdd={() => onAddContact(person)}
             />
             ))}
           </div>
@@ -128,7 +128,7 @@ export function DashboardScreen({ profiles, savedNames, onAddContanct, onNavigat
           <span className="material-symbols-outlined">call</span>
           <span>Contacts</span>
         </button>
-        <button className="nav-item">
+        <button className="nav-item" onClick={() => onNavigate("history")}>
           <span className="material-symbols-outlined">history</span>
           <span>History</span>
         </button>

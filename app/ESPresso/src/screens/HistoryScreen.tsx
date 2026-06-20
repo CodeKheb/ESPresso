@@ -1,27 +1,27 @@
-import { Contact, Screen } from "../types";
+import { DBProfile, Screen } from "../types";
 import { TopBar } from "./TopBar";
 import { PersonCard } from "./DashboardScreen";
 
 type Props = {
-  contacts: Contact[];
+  profiles: DBProfile[];
   onNavigate: (screen: Screen) => void;
 };
 
-export function ContactsScreen({ contacts, onNavigate }: Props) {
+export function HistoryScreen({ profiles, onNavigate }: Props) {
   return (
     <div className="app-shell">
       <TopBar />
       <main className="dashboard-screen">
         <header className="dashboard-header">
-          <h2>Contacts</h2>
+          <h2>History</h2>
         </header>
-        {contacts.length === 0 ? (
+        {profiles.length === 0 ? (
           <div className="empty-state">
-            No saved contacts yet. Add someone from the Dashboard.
+            No profiles seen yet. They'll show up here once you join a pot.
           </div>
         ) : (
           <div className="people-list">
-            {contacts.map((person, i) => (
+            {profiles.map((person, i) => (
               <PersonCard
                 key={person.id}
                 person={person}
@@ -41,12 +41,12 @@ export function ContactsScreen({ contacts, onNavigate }: Props) {
           <span className="material-symbols-outlined icon-filled">import_contacts</span>
           <span>Profiles</span>
         </button>
-        <button className="nav-item active" onClick={() => onNavigate("contacts")}>
+        <button className="nav-item" onClick={() => onNavigate("contacts")}>
           <span className="material-symbols-outlined">call</span>
           <span>Contacts</span>
         </button>
-        <button className="nav-item" onClick={() => onNavigate("history")}>
-          <span className="material-symbols-outlined">history</span>
+        <button className="nav-item active" onClick={() => onNavigate("history")}>
+          <span className="material-symbols-outlined icon-filled">history</span>
           <span>History</span>
         </button>
       </nav>
