@@ -51,14 +51,17 @@ function App() {
 
     async function addContact(db: Database, person: Profile) {
         await db.execute(
-            'INSERT INTO contacts (device_id, name, role, bio) VALUES ($1, $2, $3, $4) ON CONFLICT(name) DO UPDATE SET name = excluded.name, role = excluded.role, bio = excluded.bio',
+            'INSERT INTO contacts (device_id, name, role, bio) VALUES ($1, $2, $3, $4) ON CONFLICT(device_id) DO UPDATE SET name = excluded.name, role = excluded.role, bio = excluded.bio',
             [person.deviceId, person.name, person.role, person.bio]
         );
     }
 
     async function handleAddContact(person: Profile) {
         if (!dbRef.current) return;
+        console.log("Adding contact:", person);
         await addContact(dbRef.current, person);
+        const refreshed = await fetchContacts(dbRef.current);
+        console.log("Contacts after insert:", refreshed);
         setContacts(await fetchContacts(dbRef.current));
     }
 

@@ -46,34 +46,64 @@ pub fn run() {
                 },
                 tauri_plugin_sql::Migration {
                     version: 4,
-                    description: "add device table, device_id columns, drop name-based uniqueness",
-                    sql: "CREATE TABLE IF NOT EXISTS device (
-                          id TEXT PRIMARY KEY
-                          );
-
-                          ALTER TABLE profiles ADD COLUMN device_id TEXT;
-                          DROP INDEX IF EXISTS idx_profiles_name;
-                          CREATE UNIQUE INDEX idx_profiles_device_id ON profiles(device_id);
-
-                        CREATE TABLE contacts_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        device_id TEXT UNIQUE,
-                        name TEXT NOT NULL,
-                        role TEXT NOT NULL,
-                        bio TEXT,
-                        saved_at TEXT DEFAULT CURRENT_TIMESTAMP
-                        );
-                        INSERT INTO contacts_new (id, name, role, bio, saved_at)
-                        SELECT id, name, role, bio, saved_at FROM contacts;
-                        DROP TABLE contacts;
-                        ALTER TABLE contacts_new RENAME TO contacts;",
-                        kind: tauri_plugin_sql::MigrationKind::Up,
+                    description: "create device table",
+                    sql: "CREATE TABLE IF NOT EXISTS device (id TEXT PRIMARY KEY);",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
                 },
-        ],
-    )
-    .build(),
-    )   
-    .invoke_handler(tauri::generate_handler![greet])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+                tauri_plugin_sql::Migration {
+                    version: 5,
+                    description: "add device_id to profiles",
+                    sql: "ALTER TABLE profiles ADD COLUMN device_id TEXT;",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 6,
+                    description: "drop old name uniqueness on profiles",
+                    sql: "DROP INDEX IF EXISTS idx_profiles_name;",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 7,
+                    description: "add unique index on profiles.device_id",
+                    sql: "CREATE UNIQUE INDEX idx_profiles_device_id ON profiles(device_id);",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 8,
+                    description: "rebuild contacts table with device_id",
+                    sql: "CREATE TABLE contacts_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT UNIQUE,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        bio TEXT,
+        saved_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );",
+    kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 9,
+                    description: "copy contacts into new table",
+                    sql: "INSERT INTO contacts_new (id, name, role, bio, saved_at)
+        SELECT id, name, role, bio, saved_at FROM contacts;",
+        kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 10,
+                    description: "drop old contacts table",
+                    sql: "DROP TABLE contacts;",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
+                },
+                tauri_plugin_sql::Migration {
+                    version: 11,
+                    description: "rename contacts_new to contacts",
+                    sql: "ALTER TABLE contacts_new RENAME TO contacts;",
+                    kind: tauri_plugin_sql::MigrationKind::Up,
+                },        ],
+                )
+                    .build(),
+                )   
+                    .invoke_handler(tauri::generate_handler![greet])
+                    .run(tauri::generate_context!())
+                    .expect("error while running tauri application");
 }
