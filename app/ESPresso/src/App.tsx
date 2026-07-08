@@ -25,9 +25,20 @@ function App() {
 
     // SQLite helpers 
     async function fetchProfiles(db: Database): Promise<DBProfile[]> {
-        return db.select<DBProfile[]>(
-            "SELECT * FROM profiles ORDER BY created_at DESC"
+        const rows = await db.select<any[]>(
+            "SELECT id, device_id, name, role, bio FROM profiles ORDER BY created_at DESC"
         );
+
+        console.log("=== RAW DATA FETCHED FROM SQLITE ===", rows);
+
+        return rows.map(row => ({
+            id: row.id,
+            deviceId: row.device_id,
+            name: row.name,
+            role: row.role,
+            bio: row.bio,
+            created_at: row.created_at
+        })) as DBProfile[];
     }
 
     async function fetchContacts(db: Database): Promise<Contact[]> {
@@ -72,6 +83,9 @@ function App() {
             const db = await Database.load("sqlite:profiles.db");
             dbRef.current = db;
 
+            // clear un-indexed records
+            await db.execute("DELETE FROM profiles WHERE device_id = '' OR device_id IS NULL");
+
             const rows = await db.select<{ id: string }[]>("SELECT id FROM device LIMIT 1");
 
             let id: string;
@@ -85,8 +99,12 @@ function App() {
 
             if (!cancelled) setDeviceId(id);
 
-            const cachedContacts = await fetchContacts(db);
+            const cachedProfiles = await fetchProfiles(db);
+            if (!cancelled) {
+                setProfiles(cachedProfiles);
+            }
 
+            const cachedContacts = await fetchContacts(db);
             if (!cancelled) {
                 setContacts(cachedContacts);
             }     
@@ -114,14 +132,23 @@ function App() {
                 const msg: WSMessage = JSON.parse(json.data);
                 console.log("WS msg:", msg); 
                 if (msg.type === "profiles") {
-                    if (!cancelled) setConnectedProfiles(msg.data);
+                    const normalizedIncoming: Profile[] = (msg.data || []).map((p: any) => ({
+                        deviceId: p.deviceId || p.device_id,
+                        name: p.name,
+                        role: p.role,
+                        bio: p.bio
+                    }));
+
+                    if (!cancelled) setConnectedProfiles(normalizedIncoming);
+
                     if (dbRef.current) {
-                        await upsertManyFromWS(dbRef.current, msg.data);
+                        await upsertManyFromWS(dbRef.current, normalizedIncoming);
+
                         const refreshed = await fetchProfiles(dbRef.current);
                         if (!cancelled) setProfiles(refreshed);
                     }
                 }
-            };
+            };            
             wsRef.current = ws;
         }
         connect();
@@ -129,7 +156,7 @@ function App() {
     }, []);
 
     async function submitProfile() {
-        if (!name || !role) return;
+        if (!name || !role || !deviceId) return;
         const profile: Profile = { deviceId, name, role, bio };
         wsRef.current?.send(JSON.stringify(profile));
 
@@ -163,7 +190,19 @@ function App() {
         return <ContactsScreen contacts={contacts} onNavigate={setScreen} />;
     }
     if (screen === "history") {
-        return <HistoryScreen profiles={profiles} onNavigate={setScreen} />;
+        const historyProfile = profiles.filter(p => {
+            if (p.deviceId && p.deviceId == deviceId) return false;
+            return true;
+        });
+
+        const seenDeviceId = new Set<string>();
+        const uniqueProfiles = historyProfile.filter(p => {
+            const uniqueKey = p.deviceId || 'fallback-name-${p.name}';
+            if (seenDeviceId.has(uniqueKey)) return false;
+            seenDeviceId.add(p.deviceId);
+            return true;
+        });
+        return <HistoryScreen profiles={uniqueProfiles} onNavigate={setScreen} />;
     }
     const savedNames = new Set(contacts.map((c) => c.name));
     return <DashboardScreen 

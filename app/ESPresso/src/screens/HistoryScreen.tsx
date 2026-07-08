@@ -23,7 +23,7 @@ export function HistoryScreen({ profiles, onNavigate }: Props) {
           <div className="people-list">
             {profiles.map((person, i) => (
               <PersonCard
-                key={person.id}
+                key={person.deviceId || `${person.name}-${i}`}
                 person={person}
                 index={i}
                 showAddButton={false}
