@@ -15,6 +15,7 @@ SOURCE:
     https://components.espressif.com/components/espressif/cjson/versions/1.7.19~2/readme
     */
 
+#include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
 #include <esp_http_server.h>
@@ -27,6 +28,9 @@ SOURCE:
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
+#include <unistd.h>
+#include "lwip/sockets.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
@@ -45,15 +49,19 @@ SOURCE:
 #define MAX_NAME_LEN 32
 #define MAX_ROLE_LEN 64
 #define MAX_BIO_LEN 128
+#define MAX_ID_LEN 48
 
 typedef struct {
     char name[MAX_NAME_LEN];
     char role[MAX_ROLE_LEN];
     char bio[MAX_BIO_LEN];
+    char device_id[MAX_ID_LEN];
     int fd;
     bool active;
+    int64_t last_seen;
 } Profile;
 
+static portMUX_TYPE profiles_lock = portMUX_INITIALIZER_UNLOCKED;
 static Profile profiles[MAX_CLIENTS];
 
 static httpd_handle_t server_handle = NULL;
@@ -132,16 +140,19 @@ static void broadcast_profiles(httpd_handle_t hd) {
     cJSON *data = cJSON_CreateArray();
 
     // put profile name, role, bio in data array
+    taskENTER_CRITICAL(&profiles_lock);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (profiles[i].active) {
             cJSON *profile_obj = cJSON_CreateObject();
             cJSON_AddStringToObject(profile_obj, "name", profiles[i].name);
             cJSON_AddStringToObject(profile_obj, "role", profiles[i].role);
             cJSON_AddStringToObject(profile_obj, "bio", profiles[i].bio);
+            cJSON_AddStringToObject(profile_obj, "device_id", profiles[i].device_id);
 
             cJSON_AddItemToArray(data, profile_obj);
         }
     }
+    taskEXIT_CRITICAL(&profiles_lock);
 
     // add data to root
     cJSON_AddItemToObject(root, "data", data);
@@ -168,18 +179,23 @@ static void store_profile(int fd, const char *json_string) {
     // parse the JSON
     cJSON *json = cJSON_Parse(json_string);
     if (json == NULL) return;
+    taskENTER_CRITICAL(&profiles_lock);
+
+    cJSON *device_id_item = cJSON_GetObjectItem(json, "device_id");
+    const char *id_str = cJSON_GetStringValue(device_id_item);
 
     // slot 
     int slot = -1;
 
-    // if fd matches the profile slot = profile
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (fd == profiles[i].fd) {
-            slot = i;
-            break;
+    // if fd matches the profile slot = profiles
+    if (id_str != NULL) {
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (profiles[i].active && strcmp(profiles[i].device_id, id_str) == 0) {
+                slot = i;
+                break;
+            }
         }
-    } 
-
+    }
 
     // if no slot left, find a non active slot 
     if (slot == -1) {
@@ -194,6 +210,7 @@ static void store_profile(int fd, const char *json_string) {
     // if no room left
     if (slot == -1) {
         cJSON_Delete(json);
+        taskEXIT_CRITICAL(&profiles_lock);
         return;
     }
 
@@ -210,10 +227,17 @@ static void store_profile(int fd, const char *json_string) {
     const char *bio_str = cJSON_GetStringValue(bio);
     if (bio_str != NULL) strncpy(profiles[slot].bio, bio_str, MAX_BIO_LEN - 1);
 
+    cJSON *device_id = cJSON_GetObjectItem(json, "device_id");
+    const char *device_id_str = cJSON_GetStringValue(device_id);
+    if (device_id_str != NULL) strncpy(profiles[slot].device_id, device_id_str, MAX_ID_LEN - 1);
+
+    profiles[slot].last_seen = esp_timer_get_time();
+
     // store fd and make profile active
     profiles[slot].fd = fd;
     profiles[slot].active = true;
     cJSON_Delete(json);
+    taskEXIT_CRITICAL(&profiles_lock);
 }
 
 
@@ -270,10 +294,37 @@ static const httpd_uri_t ws = {
     .is_websocket = true,
 };
 
+static void on_socket_close(httpd_handle_t hd, int sockfd) {
+    taskENTER_CRITICAL(&profiles_lock);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (profiles[i].active && profiles[i].fd == sockfd) {
+            profiles[i].active = false;
+            memset(&profiles[i], 0, sizeof(Profile));
+            break;
+        }
+    }
+    taskEXIT_CRITICAL(&profiles_lock);
+    broadcast_profiles(hd);
+    close(sockfd);
+}
+
 static void ping_task(void *arg) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(10000));
         if (server_handle == NULL) continue;
+
+        int64_t now = esp_timer_get_time();
+        bool pruned = false; 
+        taskENTER_CRITICAL(&profiles_lock);
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (profiles[i].active && (now - profiles[i].last_seen) > 30 * 1000000) {
+                profiles[i].active = false;
+                memset(&profiles[i], 0, sizeof(Profile));
+                pruned = true; 
+            }
+        }
+        taskEXIT_CRITICAL(&profiles_lock);
+        if (pruned) broadcast_profiles(server_handle); 
         
         size_t clients = MAX_CLIENTS;
         int client_fds[MAX_CLIENTS];
@@ -308,6 +359,7 @@ static const httpd_uri_t main = {
 static httpd_handle_t start_webserver(void) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.close_fn = on_socket_close;
 
     if (httpd_start(&server, &config) == ESP_OK) {
         // SET URI HANDLERS
