@@ -24,7 +24,7 @@ class MainActivity : TauriActivity() {
   private fun hideSystemBars() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       window.insetsController?.let {
-        it.hide(WindowInsets.Type.navigationBars())
+        it.hide(WindowInsets.Type.navigationBars() or WindowInsets.Type.statusBars())
         it.systemBarsBehavior =
           WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
       }
