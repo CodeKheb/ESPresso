@@ -5,12 +5,13 @@ import { PersonCard } from "./DashboardScreen";
 type Props = {
   contacts: Contact[];
   onNavigate: (screen: Screen) => void;
+  onSettings: () => void;
 };
 
-export function ContactsScreen({ contacts, onNavigate }: Props) {
+export function ContactsScreen({ contacts, onNavigate, onSettings }: Props) {
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar onSettings={onSettings} />
       <main className="dashboard-screen">
         <header className="dashboard-header">
           <h2>Contacts</h2>

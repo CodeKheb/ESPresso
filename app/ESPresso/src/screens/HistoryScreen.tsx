@@ -1,29 +1,35 @@
-import { DBProfile, Screen } from "../types";
+import { Profile, Screen } from "../types";
 import { TopBar } from "./TopBar";
 import { PersonCard } from "./DashboardScreen";
 
 type Props = {
-  profiles: DBProfile[];
+  profiles: Profile[];
+  deviceId: string;
   onNavigate: (screen: Screen) => void;
+  onSettings: () => void;
 };
 
-export function HistoryScreen({ profiles, onNavigate }: Props) {
+export function HistoryScreen({ profiles, deviceId, onNavigate, onSettings }: Props) {
+  // The database already dedupes by device_id (UNIQUE constraint), so we only
+  // need to hide our own profile here.
+  const history = profiles.filter((p) => p.deviceId !== deviceId);
+
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar onSettings={onSettings} />
       <main className="dashboard-screen">
         <header className="dashboard-header">
           <h2>History</h2>
         </header>
-        {profiles.length === 0 ? (
+        {history.length === 0 ? (
           <div className="empty-state">
             No profiles seen yet. They'll show up here once you join a pot.
           </div>
         ) : (
           <div className="people-list">
-            {profiles.map((person, i) => (
+            {history.map((person, i) => (
               <PersonCard
-                key={person.deviceId || `${person.name}-${i}`}
+                key={person.deviceId}
                 person={person}
                 index={i}
                 showAddButton={false}

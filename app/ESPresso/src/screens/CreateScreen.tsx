@@ -6,19 +6,31 @@ type Props = {
   bio: string;
   onNameChange: (v: string) => void;
   onRoleChange: (v: string) => void;
-  onBioChange:  (v: string) => void;
+  onBioChange: (v: string) => void;
   onSubmit: () => void;
+  onSettings: () => void;
 };
 
-export function CreateScreen({ name, role, bio, onNameChange, onRoleChange, onBioChange, onSubmit }: Props) {
+export function CreateScreen({
+  name,
+  role,
+  bio,
+  onNameChange,
+  onRoleChange,
+  onBioChange,
+  onSubmit,
+  onSettings,
+}: Props) {
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar onSettings={onSettings} />
       <main className="create-screen">
         <div className="create-inner">
           <div className="create-header">
             <h2 className="headline-lg-mobile">Join the Brew</h2>
-            <p className="body-md">Start your journey into specialty profile sharing and coffee craft.</p>
+            <p className="body-md">
+              Start your journey into specialty profile sharing and coffee craft.
+            </p>
           </div>
 
           <div className="brew-card">
@@ -67,11 +79,7 @@ export function CreateScreen({ name, role, bio, onNameChange, onRoleChange, onBi
               />
             </div>
 
-            <button
-              className="btn-join"
-              onClick={onSubmit}
-              disabled={!name || !role}
-            >
+            <button className="btn-join" onClick={onSubmit} disabled={!name || !role}>
               <span>Join</span>
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>

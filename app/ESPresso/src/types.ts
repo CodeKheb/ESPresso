@@ -5,20 +5,43 @@ export type Profile = {
   bio: string;
 };
 
-export type DBProfile = Profile & {
-    id: number;
-    created_at: string;
-};
-
-export type Contact = Profile & {
+export type Contact = {
   id: number;
-  saved_at: string;
+  deviceId: string;
+  name: string;
+  role: string;
+  bio: string;
+  savedAt: string;
 };
 
-export type WSMessage = {
-  type: string;
-  data: Profile[];
+export type Device = {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  source: "manual" | "auto";
+  lastSeen: string | null;
+};
+
+export type DiscoveredDevice = {
+  name: string;
+  host: string;
+  ip: string | null;
+  port: number;
+};
+
+export type HostInfo = {
+  hostname: string;
+  port: number;
+  instance: string;
 };
 
 export type Status = "connecting" | "connected" | "disconnected" | "error";
-export type Screen = "create" | "dashboard" | "contacts" | "history";
+
+export type ConnectionStatus = {
+  state: Status;
+  host: string | null;
+  message: string | null;
+};
+
+export type Screen = "create" | "dashboard" | "contacts" | "history" | "devices";

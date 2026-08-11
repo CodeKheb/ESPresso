@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Profile } from "../types";
+import { Profile, Screen } from "../types";
 import { TopBar } from "./TopBar";
-import { Screen } from "../types";
 
-type Props = { 
-    profiles: Profile[];
-    savedNames: Set<string>;
-    onAddContact: (person: Profile) => void;
-    onNavigate: (screen: Screen) => void;
+type Props = {
+  profiles: Profile[];
+  deviceHost: string | null;
+  savedNames: Set<string>;
+  onAddContact: (person: Profile) => void;
+  onNavigate: (screen: Screen) => void;
+  onSettings: () => void;
 };
 
 const AVATAR_STYLES = ["avatar-cafe", "avatar-init-a", "avatar-init-b"];
@@ -21,19 +22,18 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-
-export function PersonCard({ 
-    person, 
-    index,
-    isSaved,
-    onAdd,
-    showAddButton = true,
-}: { 
-    person: Profile; 
-    index: number;
-    isSaved?: boolean;
-    onAdd?: () => void;
-    showAddButton?: boolean;
+export function PersonCard({
+  person,
+  index,
+  isSaved,
+  onAdd,
+  showAddButton = true,
+}: {
+  person: Profile;
+  index: number;
+  isSaved?: boolean;
+  onAdd?: () => void;
+  showAddButton?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const avatarClass = AVATAR_STYLES[index % AVATAR_STYLES.length];
@@ -62,19 +62,19 @@ export function PersonCard({
           <p className="person-role">{person.role}</p>
           {person.bio && <p className="person-bio">"{person.bio}"</p>}
           {showAddButton && (
-              <button
-                className="btn-add-contact"
-                disabled={isSaved}
-                onClick={(e)=> {
-                    e.stopPropagation();
-                    onAdd?.();
-                }}
+            <button
+              className="btn-add-contact"
+              disabled={isSaved}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd?.();
+              }}
             >
-            <span className="material-symbols-outlined">
-             {isSaved ? "check" : "person_add"}
-             </span>
-             <span>{isSaved ? "Saved" : "Add"}</span>
-             </button>
+              <span className="material-symbols-outlined">
+                {isSaved ? "check" : "person_add"}
+              </span>
+              <span>{isSaved ? "Saved" : "Add"}</span>
+            </button>
           )}
         </div>
       </div>
@@ -82,10 +82,17 @@ export function PersonCard({
   );
 }
 
-export function DashboardScreen({ profiles, savedNames, onAddContact: onAddContact, onNavigate }: Props) {
+export function DashboardScreen({
+  profiles,
+  deviceHost,
+  savedNames,
+  onAddContact,
+  onNavigate,
+  onSettings,
+}: Props) {
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar onSettings={onSettings} />
       <main className="dashboard-screen">
         <header className="dashboard-header">
           <h2>Dashboard</h2>
@@ -93,28 +100,26 @@ export function DashboardScreen({ profiles, savedNames, onAddContact: onAddConta
             <div className="pulse-dot" />
             <span className="active-label">Active Pot</span>
           </div>
+          {deviceHost && <p className="connected-host label-sm">{deviceHost}</p>}
         </header>
 
         {profiles.length === 0 ? (
-          <div className="empty-state">
-            Waiting for others to join the pot...
-          </div>
+          <div className="empty-state">Waiting for others to join the pot...</div>
         ) : (
           <div className="people-list">
             {profiles.map((person, i) => (
-              <PersonCard 
-               key={i}
-               person={person}
-               index={i}
-               isSaved={savedNames.has(person.name)}
-               onAdd={() => onAddContact(person)}
-            />
+              <PersonCard
+                key={person.deviceId}
+                person={person}
+                index={i}
+                isSaved={savedNames.has(person.name)}
+                onAdd={() => onAddContact(person)}
+              />
             ))}
           </div>
         )}
       </main>
 
-      {/* Bottom Nav */}
       <nav className="bottom-nav">
         <button className="nav-item" onClick={() => onNavigate("create")}>
           <span className="material-symbols-outlined">local_cafe</span>

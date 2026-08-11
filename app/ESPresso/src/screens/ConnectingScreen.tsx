@@ -8,7 +8,11 @@ const MESSAGES = [
   "Tamping the signal...",
 ];
 
-export function ConnectingScreen() {
+type Props = {
+  message?: string | null;
+};
+
+export function ConnectingScreen({ message }: Props) {
   const [msgIndex, setMsgIndex] = useState(0);
   const [fade, setFade] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -21,7 +25,9 @@ export function ConnectingScreen() {
         setFade(true);
       }, 400);
     }, 4000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   return (
@@ -46,20 +52,24 @@ export function ConnectingScreen() {
             {MESSAGES[msgIndex]}
           </h1>
           <p className="connecting-sub body-md">
-            Setting up your barista-grade environment. Please keep your device near the ESP32 node.
+            Starting your pot and scanning this WiFi for others. Anyone with ESPresso
+            open on the same network will appear automatically.
           </p>
+          {message && <p className="label-sm connecting-status">{message}</p>}
         </div>
 
         <div className="spinner-wrap">
           <div className="spinner-ring" />
           <div className="dot-row">
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </div>
         </div>
 
         <div className="connecting-badge">
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>router</span>
-          <span>Scanning Bluetooth LE</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>radar</span>
+          <span>Mesh pot on this WiFi</span>
         </div>
       </main>
     </div>

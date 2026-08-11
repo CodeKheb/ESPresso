@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { TopBar } from "./TopBar";
 
-export function DisconnectedScreen() {
+type Props = {
+  message?: string | null;
+  onRetry: () => void;
+  onChooseDevice: () => void;
+};
+
+export function DisconnectedScreen({ message, onRetry, onChooseDevice }: Props) {
   const [retrying, setRetrying] = useState(false);
 
   function handleRetry() {
     setRetrying(true);
+    onRetry();
     setTimeout(() => setRetrying(false), 2500);
   }
 
@@ -28,8 +35,10 @@ export function DisconnectedScreen() {
         <div style={{ maxWidth: 320 }}>
           <h2 className="headline-lg-mobile disconnected-title">Off the Grid</h2>
           <p className="body-md disconnected-sub">
-            Please connect to the <strong>ESPresso</strong> WiFi network to continue.
+            This device can't start its pot. Make sure you're connected to a WiFi network
+            and try again.
           </p>
+          {message && <p className="label-sm disconnected-status">{message}</p>}
         </div>
 
         <div className="disc-actions">
@@ -42,6 +51,10 @@ export function DisconnectedScreen() {
             </span>
             {retrying ? "Connecting..." : "Retry Connection"}
           </button>
+          <button className="btn-primary-pill btn-secondary-pill" onClick={onChooseDevice}>
+            <span className="material-symbols-outlined">router</span>
+            View Pots
+          </button>
         </div>
 
         <div className="disc-tip">
@@ -51,8 +64,8 @@ export function DisconnectedScreen() {
           <div>
             <p className="tip-title">Quick Tip</p>
             <p className="tip-body">
-            Connect to the ESPresso wifi and turn off mobile data
-            <p>Password: espresso</p>
+              ESPresso works on <strong>any WiFi</strong> — every device with the app open
+              hosts a pot and finds the others automatically via mDNS. No hub needed.
             </p>
           </div>
         </div>

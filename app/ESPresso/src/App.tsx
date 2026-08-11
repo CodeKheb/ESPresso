@@ -1,216 +1,249 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import "./screens/screens.css";
-import { Contact, DBProfile, Profile, WSMessage, Status, Screen } from "./types";
-import { ConnectingScreen }    from "./screens/ConnectingScreen";
-import { DisconnectedScreen }  from "./screens/DisconnectedScreen";
-import { CreateScreen }        from "./screens/CreateScreen";
-import { DashboardScreen }     from "./screens/DashboardScreen";
-import { ContactsScreen }      from "./screens/ContactsScreen";
-import { HistoryScreen }       from "./screens/HistoryScreen";
-import Database from "@tauri-apps/plugin-sql";
+import type {
+  Contact,
+  ConnectionStatus,
+  Device,
+  DiscoveredDevice,
+  HostInfo,
+  Profile,
+  Screen,
+} from "./types";
+import { ConnectingScreen } from "./screens/ConnectingScreen";
+import { DisconnectedScreen } from "./screens/DisconnectedScreen";
+import { CreateScreen } from "./screens/CreateScreen";
+import { DashboardScreen } from "./screens/DashboardScreen";
+import { ContactsScreen } from "./screens/ContactsScreen";
+import { HistoryScreen } from "./screens/HistoryScreen";
+import { DevicesScreen } from "./screens/DevicesScreen";
+import {
+  api,
+  onContacts,
+  onDevices,
+  onDiscovery,
+  onProfiles,
+  onStatus,
+} from "./lib/espresso";
 
 function App() {
-    const wsRef = useRef<WebSocket | null>(null);
-    const dbRef = useRef<Database | null>(null);
-    const [status, setStatus]   = useState<Status>("connecting");
-    const [screen, setScreen]   = useState<Screen>("create");
-    const [profiles, setProfiles] = useState<DBProfile[]>([]);
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [connectedProfiles, setConnectedProfiles] = useState<Profile[]>([]);
-    const [name, setName] = useState("");
-    const [role, setRole] = useState("");
-    const [bio,  setBio]  = useState("");
-    const [deviceId, setDeviceId] = useState<string>("");
+  const [status, setStatus] = useState<ConnectionStatus>({
+    state: "connecting",
+    host: null,
+    message: null,
+  });
+  const [screen, setScreen] = useState<Screen>("create");
+  /** Live profiles currently in the pot mesh (drives the dashboard). */
+  const [liveProfiles, setLiveProfiles] = useState<Profile[]>([]);
+  /** Everything ever seen, from SQLite (drives history). */
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
+  const [hostInfo, setHostInfo] = useState<HostInfo | null>(null);
+  const [deviceId, setDeviceId] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [bio, setBio] = useState("");
 
-    // SQLite helpers 
-    async function fetchProfiles(db: Database): Promise<DBProfile[]> {
-        const rows = await db.select<any[]>(
-            "SELECT id, device_id, name, role, bio FROM profiles ORDER BY created_at DESC"
-        );
+  // Boot: load device identity + cached data, then subscribe to live events.
+  // The pot mesh lives in the Rust backend, so this effect is idempotent even
+  // under React StrictMode double-mounting.
+  useEffect(() => {
+    let active = true;
+    const unlisteners: (() => void)[] = [];
 
-        console.log("=== RAW DATA FETCHED FROM SQLITE ===", rows);
+    (async () => {
+      try {
+        const id = await api.getDeviceId();
+        if (!active) return;
+        setDeviceId(id);
 
-        return rows.map(row => ({
-            id: row.id,
-            deviceId: row.device_id,
-            name: row.name,
-            role: row.role,
-            bio: row.bio,
-            created_at: row.created_at
-        })) as DBProfile[];
+        const [st, ps, cs, ds, hi] = await Promise.all([
+          api.getStatus(),
+          api.getProfiles(),
+          api.getContacts(),
+          api.getDevices(),
+          api.getHostInfo(),
+        ]);
+        if (!active) return;
+        setStatus(st);
+        setLiveProfiles(ps);
+        setProfiles(ps);
+        setContacts(cs);
+        setDevices(ds);
+        setHostInfo(hi);
+      } catch (err) {
+        console.error("App init failed", err);
+      }
+
+      const subs = await Promise.all([
+        onStatus((s) => {
+          if (!active) return;
+          setStatus(s);
+          if (s.state !== "connected") {
+            setLiveProfiles([]);
+          }
+        }),
+        onProfiles((p) => {
+          if (!active) return;
+          setLiveProfiles(p);
+          // Every live profile is persisted to SQLite, so refresh history.
+          api
+            .getProfiles()
+            .then((all) => {
+              if (active) setProfiles(all);
+            })
+            .catch((err) => console.error("Failed to refresh history", err));
+        }),
+        onContacts((c) => {
+          if (active) setContacts(c);
+        }),
+        onDevices((d) => {
+          if (active) setDevices(d);
+        }),
+        onDiscovery((d) => {
+          if (active) setDiscovered(d);
+        }),
+      ]);
+      if (!active) {
+        subs.forEach((u) => u());
+        return;
+      }
+      unlisteners.push(...subs);
+    })();
+
+    return () => {
+      active = false;
+      unlisteners.forEach((u) => u());
+    };
+  }, []);
+
+  async function submitProfile() {
+    if (!name || !role || !deviceId) return;
+    const profile: Profile = { deviceId, name, role, bio };
+    try {
+      await api.sendProfile(profile);
+    } catch (err) {
+      console.error("Failed to send profile", err);
     }
+    setScreen("dashboard");
+  }
 
-    async function fetchContacts(db: Database): Promise<Contact[]> {
-        return db.select<Contact[]>("SELECT * FROM contacts ORDER BY saved_at DESC"
-                                   );
+  async function handleAddContact(person: Profile) {
+    try {
+      setContacts(await api.addContact(person));
+    } catch (err) {
+      console.error("Failed to add contact", err);
     }
+  }
 
-    async function upsertProfile(db: Database, profile: Profile) {
-        await db.execute(
-            `INSERT INTO profiles (device_id, name, role, bio) VALUES ($1, $2, $3, $4)
-            ON CONFLICT(device_id) DO UPDATE SET name = excluded.name, role = excluded.role, bio = excluded.bio`,
-                [profile.deviceId, profile.name, profile.role, profile.bio]
-        );
+  async function handleConnect(host: string) {
+    try {
+      await api.connectTo(host);
+    } catch (err) {
+      console.error("Failed to connect", err);
     }
+  }
 
-    async function upsertManyFromWS(db: Database, incoming: Profile[]) {
-        for (const p of incoming) {
-            await upsertProfile(db, p);
-        }
+  async function handleAddDevice(host: string) {
+    try {
+      setDevices(await api.addDevice(host));
+    } catch (err) {
+      console.error("Failed to add device", err);
     }
+  }
 
-    async function addContact(db: Database, person: Profile) {
-        await db.execute(
-            'INSERT INTO contacts (device_id, name, role, bio) VALUES ($1, $2, $3, $4) ON CONFLICT(device_id) DO UPDATE SET name = excluded.name, role = excluded.role, bio = excluded.bio',
-            [person.deviceId, person.name, person.role, person.bio]
-        );
+  async function handleRemoveDevice(id: number) {
+    try {
+      setDevices(await api.removeDevice(id));
+    } catch (err) {
+      console.error("Failed to remove device", err);
     }
+  }
 
-    async function handleAddContact(person: Profile) {
-        if (!dbRef.current) return;
-        console.log("Adding contact:", person);
-        await addContact(dbRef.current, person);
-        const refreshed = await fetchContacts(dbRef.current);
-        console.log("Contacts after insert:", refreshed);
-        setContacts(await fetchContacts(dbRef.current));
+  async function handleScan() {
+    try {
+      setDiscovered(await api.discover());
+    } catch (err) {
+      console.error("Discovery failed", err);
     }
+  }
 
-    // DB init before WS 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            const db = await Database.load("sqlite:profiles.db");
-            dbRef.current = db;
+  // Routing
+  if (screen === "devices") {
+    return (
+      <DevicesScreen
+        hostInfo={hostInfo}
+        devices={devices}
+        discovered={discovered}
+        currentHost={status.host}
+        onConnect={handleConnect}
+        onAdd={handleAddDevice}
+        onRemove={handleRemoveDevice}
+        onScan={handleScan}
+        onNavigate={setScreen}
+      />
+    );
+  }
+  if (status.state === "disconnected" || status.state === "error") {
+    return (
+      <DisconnectedScreen
+        message={status.message}
+        onRetry={() => api.retry()}
+        onChooseDevice={() => setScreen("devices")}
+      />
+    );
+  }
+  if (status.state === "connecting") {
+    return <ConnectingScreen message={status.message} />;
+  }
 
-            // clear un-indexed records
-            await db.execute("DELETE FROM profiles WHERE device_id = '' OR device_id IS NULL");
+  if (screen === "contacts") {
+    return (
+      <ContactsScreen
+        contacts={contacts}
+        onNavigate={setScreen}
+        onSettings={() => setScreen("devices")}
+      />
+    );
+  }
+  if (screen === "history") {
+    return (
+      <HistoryScreen
+        profiles={profiles}
+        deviceId={deviceId}
+        onNavigate={setScreen}
+        onSettings={() => setScreen("devices")}
+      />
+    );
+  }
+  if (screen === "create") {
+    return (
+      <CreateScreen
+        name={name}
+        role={role}
+        bio={bio}
+        onNameChange={setName}
+        onRoleChange={setRole}
+        onBioChange={setBio}
+        onSubmit={submitProfile}
+        onSettings={() => setScreen("devices")}
+      />
+    );
+  }
 
-            const rows = await db.select<{ id: string }[]>("SELECT id FROM device LIMIT 1");
-
-            let id: string;
-
-            if (rows.length > 0) {
-                id = rows[0].id;
-            } else {
-                id = crypto.randomUUID();
-                await db.execute("INSERT INTO device (id) VALUES ($1)", [id]);
-            }
-
-            if (!cancelled) setDeviceId(id);
-
-            const cachedProfiles = await fetchProfiles(db);
-            if (!cancelled) {
-                setProfiles(cachedProfiles);
-            }
-
-            const cachedContacts = await fetchContacts(db);
-            if (!cancelled) {
-                setContacts(cachedContacts);
-            }     
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // WebSocket logic
-    useEffect(() => {
-        let cancelled = false;
-        function connect() {
-            const ws = new WebSocket("ws://192.168.4.1/ws");
-            const timeout = setTimeout(() => { ws.close(); }, 5000);
-            ws.onopen  = () => { clearTimeout(timeout); if (!cancelled) setStatus("connected"); };
-            ws.onclose = () => {
-                clearTimeout(timeout);
-                if (!cancelled) {
-                    setStatus("disconnected"); 
-                    setConnectedProfiles([]);
-                    setTimeout(connect, 3000); 
-                }
-            };
-            ws.onerror = () => ws.close();
-            ws.onmessage = async (json) => {
-                const msg: WSMessage = JSON.parse(json.data);
-                console.log("WS msg:", msg); 
-                if (msg.type === "profiles") {
-                    const normalizedIncoming: Profile[] = (msg.data || []).map((p: any) => ({
-                        deviceId: p.deviceId || p.device_id,
-                        name: p.name,
-                        role: p.role,
-                        bio: p.bio
-                    }));
-
-                    if (!cancelled) setConnectedProfiles(normalizedIncoming);
-
-                    if (dbRef.current) {
-                        await upsertManyFromWS(dbRef.current, normalizedIncoming);
-
-                        const refreshed = await fetchProfiles(dbRef.current);
-                        if (!cancelled) setProfiles(refreshed);
-                    }
-                }
-            };            
-            wsRef.current = ws;
-        }
-        connect();
-        return () => { cancelled = true; wsRef.current?.close(); };
-    }, []);
-
-    async function submitProfile() {
-        if (!name || !role || !deviceId) return;
-        const profile: Profile = { deviceId, name, role, bio };
-        wsRef.current?.send(JSON.stringify(profile));
-
-        if (dbRef.current) {
-            await upsertProfile(dbRef.current, profile);
-            const refreshed = await fetchProfiles(dbRef.current);
-            setProfiles(refreshed);
-        }
-        setScreen("dashboard");
-    }
-
-    // Screen routing 
-    if (status === "disconnected" || status === "error") {
-        return <DisconnectedScreen />;
-    }
-    if (status === "connecting") {
-        return <ConnectingScreen />;
-    }
-    if (screen === "create") {
-        return (
-            <CreateScreen
-            name={name} role={role} bio={bio}
-            onNameChange={setName}
-            onRoleChange={setRole}
-            onBioChange={setBio}
-            onSubmit={submitProfile}
-            />
-        );
-    }
-    if (screen === "contacts") {
-        return <ContactsScreen contacts={contacts} onNavigate={setScreen} />;
-    }
-    if (screen === "history") {
-        const historyProfile = profiles.filter(p => {
-            if (p.deviceId && p.deviceId == deviceId) return false;
-            return true;
-        });
-
-        const seenDeviceId = new Set<string>();
-        const uniqueProfiles = historyProfile.filter(p => {
-            const uniqueKey = p.deviceId || 'fallback-name-${p.name}';
-            if (seenDeviceId.has(uniqueKey)) return false;
-            seenDeviceId.add(p.deviceId);
-            return true;
-        });
-        return <HistoryScreen profiles={uniqueProfiles} onNavigate={setScreen} />;
-    }
-    const savedNames = new Set(contacts.map((c) => c.name));
-    return <DashboardScreen 
-    profiles={connectedProfiles}
-    savedNames={savedNames}
-    onAddContact={handleAddContact}
-    onNavigate={setScreen}
-    />;
+  const savedNames = new Set(contacts.map((c) => c.name));
+  return (
+    <DashboardScreen
+      profiles={liveProfiles}
+      deviceHost={hostInfo?.hostname ?? status.host}
+      savedNames={savedNames}
+      onAddContact={handleAddContact}
+      onNavigate={setScreen}
+      onSettings={() => setScreen("devices")}
+    />
+  );
 }
 
 export default App;
